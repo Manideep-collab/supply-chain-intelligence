@@ -33,3 +33,4 @@ plotly==5.18.0
 # Utilities
 python-dotenv==1.0.1
 pydantic==2.6.1
+setuptools==69.5.1
