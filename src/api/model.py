@@ -10,7 +10,6 @@ import os
 import json
 import numpy as np
 import pandas as pd
-import mlflow.xgboost
 from dotenv import load_dotenv
 
 load_dotenv()
