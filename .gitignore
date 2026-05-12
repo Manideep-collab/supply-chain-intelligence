@@ -40,5 +40,9 @@ docker/volumes/
 *.log
 logs/
 
+# Keep models/ tracked — needed for deployment
+!models/xgboost_model.json
+!models/feature_names.json
+
 #extras
 instructions.txt

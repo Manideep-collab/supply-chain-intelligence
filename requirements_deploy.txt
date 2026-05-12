@@ -1,0 +1,17 @@
+# API
+fastapi==0.109.2
+uvicorn==0.27.1
+pydantic==2.6.1
+
+# ML
+xgboost==2.0.3
+scikit-learn==1.4.0
+numpy==1.26.4
+pandas==2.1.4
+
+# Database
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
+
+# Utils
+python-dotenv==1.0.1

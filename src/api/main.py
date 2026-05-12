@@ -19,7 +19,11 @@ from contextlib import asynccontextmanager
 import numpy as np
 
 # Path setup
-sys.path.append(os.path.join(os.path.dirname(__file__), '../ingestion'))
+ROOT_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+sys.path.insert(0, os.path.join(ROOT_DIR, 'src', 'ingestion'))
+sys.path.insert(0, os.path.join(ROOT_DIR, 'src', 'api'))
 
 from schemas import (
     ShipmentFeatures,

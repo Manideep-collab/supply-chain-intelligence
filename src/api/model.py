@@ -71,31 +71,39 @@ class RiskModel:
 
     def load(self):
         """
-        Load trained XGBoost model from MLflow model registry.
-        Called once when FastAPI starts up.
+        Load trained XGBoost model from exported file.
+        No MLflow dependency in production.
         """
         try:
-            # Set MLflow tracking URI
-            mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-            mlflow.set_tracking_uri(mlflow_uri)
+            import xgboost as xgb
+            import json
 
-            # Load by model name and version from .env
-            model_name    = os.getenv("MLFLOW_MODEL_NAME", "supply-chain-risk-model")
-            model_version = os.getenv("MLFLOW_MODEL_VERSION", "6")
+            # Look for model file relative to project root
+            # Works both locally and on Render
+            base_dir   = os.path.dirname(
+                os.path.dirname(os.path.dirname(__file__))
+            )
+            model_path   = os.path.join(base_dir, "models", "xgboost_model.json")
+            feature_path = os.path.join(base_dir, "models", "feature_names.json")
 
-            model_uri = f"models:/{model_name}/{model_version}"
-            print(f"📦 Loading model: {model_uri}")
+            print(f"📦 Loading model from: {model_path}")
 
-            self.model         = mlflow.xgboost.load_model(model_uri)
-            self.model_version = f"{model_name}/v{model_version}"
+            self.model = xgb.XGBClassifier()
+            self.model.load_model(model_path)
+
+            # Load feature names
+            with open(feature_path, "r") as f:
+                global FEATURE_NAMES
+                FEATURE_NAMES = json.load(f)
+
+            self.model_version = "supply-chain-risk-model/v6"
             self.is_loaded     = True
 
-            print(f"✅ Model loaded successfully: {self.model_version}")
-            print(f"   Features expected: {len(FEATURE_NAMES)}")
+            print(f"✅ Model loaded successfully")
+            print(f"   Features: {len(FEATURE_NAMES)}")
 
         except Exception as e:
             print(f"❌ Model loading failed: {e}")
-            print("   Make sure MLflow server is running at localhost:5000")
             self.is_loaded = False
             raise
 
