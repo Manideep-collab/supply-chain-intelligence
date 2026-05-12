@@ -61,7 +61,7 @@ def bulk_load_shipments():
 
     # Write in batches of 5000 — faster than row by row
     # and doesn't overwhelm memory like doing all at once
-    batch_size = 100
+    batch_size = 5000
     shipment_df = pd.DataFrame(records)
     demand_df = pd.DataFrame(demand_records)
 
