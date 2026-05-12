@@ -1,6 +1,3 @@
-# app.py
-# Location: dashboard/app.py
-#
 # Main Streamlit dashboard for the Supply Chain Disruption
 # Intelligence Platform.
 #
@@ -33,6 +30,9 @@ from queries import (
     get_high_risk_alerts,
     get_country_risk_map_data,
     get_category_risk,
+    get_anomaly_alerts,
+    get_demand_forecast,
+    get_forecast_categories,
 )
 from components.kpi_cards import render_kpi_cards
 from components.risk_table import render_risk_table
@@ -92,6 +92,8 @@ with st.sidebar:
             "📊 Executive Overview",
             "🏭 Supplier Risk Rankings",
             "🚨 Alert Feed",
+            "🔮 Demand Forecast",
+            "🔍 Anomaly Detection",
             "🤖 Model Performance",
         ]
     )
@@ -128,6 +130,8 @@ def load_all_data():
         'alerts':     get_high_risk_alerts(limit=100),
         'map_data':   get_country_risk_map_data(),
         'categories': get_category_risk(),
+        'anomalies':  get_anomaly_alerts(),
+        'forecast_categories': get_forecast_categories(),
     }
 
 
@@ -341,8 +345,270 @@ elif page == "🚨 Alert Feed":
 
     render_alert_feed(data['alerts'])
 
+# ── PAGE 4: Demand Forecast ───────────────────────────────────────────────────
 
-# ── PAGE 4: Model Performance ─────────────────────────────────────────────────
+elif page == "🔮 Demand Forecast":
+
+    st.markdown('<div class="main-header">🔮 Demand Forecast</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sub-header">5-week XGBoost demand forecast '
+        'with 95% confidence intervals</div>',
+        unsafe_allow_html=True
+    )
+
+    forecast_cats = data['forecast_categories']
+
+    if not forecast_cats:
+        st.warning(
+            "No forecast data found. "
+            "Run `python src/models/demand_forecast.py` first."
+        )
+    else:
+        selected_cat = st.selectbox(
+            "Select Product Category",
+            forecast_cats
+        )
+
+        forecast_df = get_demand_forecast(selected_cat)
+
+        if forecast_df.empty:
+            st.warning(f"No forecast available for {selected_cat}")
+        else:
+            # KPI summary
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(
+                    "Peak Weekly Forecast",
+                    f"{forecast_df['predicted_qty'].max():.0f} units",
+                )
+            with col2:
+                st.metric(
+                    "Average Weekly Forecast",
+                    f"{forecast_df['predicted_qty'].mean():.0f} units",
+                )
+            with col3:
+                st.metric(
+                    "Weeks Forecasted",
+                    f"{len(forecast_df)}",
+                )
+
+            st.divider()
+
+            # Forecast chart
+            st.subheader(f"📈 {selected_cat} — Demand Forecast")
+
+            fig = go.Figure()
+
+            # Confidence band — filled area between upper and lower
+            fig.add_trace(go.Scatter(
+                x=pd.concat([
+                    forecast_df['forecast_date'],
+                    forecast_df['forecast_date'].iloc[::-1]
+                ]),
+                y=pd.concat([
+                    forecast_df['upper_bound'],
+                    forecast_df['lower_bound'].iloc[::-1]
+                ]),
+                fill='toself',
+                fillcolor='rgba(52, 152, 219, 0.2)',
+                line=dict(color='rgba(255,255,255,0)'),
+                name='95% Confidence Interval',
+            ))
+
+            # Predicted line
+            fig.add_trace(go.Scatter(
+                x=forecast_df['forecast_date'],
+                y=forecast_df['predicted_qty'],
+                mode='lines+markers',
+                name='Predicted Demand',
+                line=dict(color='#3498db', width=3),
+                marker=dict(size=10),
+            ))
+
+            # Upper bound
+            fig.add_trace(go.Scatter(
+                x=forecast_df['forecast_date'],
+                y=forecast_df['upper_bound'],
+                mode='lines',
+                name='Upper Bound',
+                line=dict(color='#e74c3c', width=1, dash='dash'),
+            ))
+
+            # Lower bound
+            fig.add_trace(go.Scatter(
+                x=forecast_df['forecast_date'],
+                y=forecast_df['lower_bound'],
+                mode='lines',
+                name='Lower Bound',
+                line=dict(color='#2ecc71', width=1, dash='dash'),
+            ))
+
+            fig.update_layout(
+                xaxis_title='Week',
+                yaxis_title='Demand (units/week)',
+                height=450,
+                legend=dict(x=0.01, y=0.99),
+                margin=dict(t=20),
+                hovermode='x unified',
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.divider()
+
+            # Raw numbers table
+            st.subheader("📋 Forecast Details")
+            display_df = forecast_df[[
+                'forecast_date', 'predicted_qty',
+                'lower_bound', 'upper_bound'
+            ]].rename(columns={
+                'forecast_date': 'Week',
+                'predicted_qty': 'Predicted (units)',
+                'lower_bound':   'Lower Bound',
+                'upper_bound':   'Upper Bound',
+            })
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.divider()
+
+            # Model explanation
+            st.subheader("ℹ️ How This Forecast Works")
+            st.markdown("""
+            **Algorithm:** XGBoost Regressor with recursive forecasting
+
+            The model learns from 145 weeks of historical demand using:
+            - **Lag features** — demand from 1, 2, 4, and 52 weeks ago
+            - **Rolling statistics** — 4-week and 12-week moving averages
+            - **Trend feature** — direction of demand over last 4 weeks
+            - **Calendar features** — month, quarter, week of year, Q4 flag
+
+            **Recursive forecasting:** each week's prediction is used as
+            input for the following week's lag features — allowing multi-step
+            forecasting without future data.
+
+            **95% confidence intervals** are derived from the standard
+            deviation of validation set residuals.
+            """)
+
+
+# ── PAGE 5: Anomaly Detection ─────────────────────────────────────────────────
+
+elif page == "🔍 Anomaly Detection":
+
+    st.markdown('<div class="main-header">🔍 Anomaly Detection</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sub-header">Suppliers with statistically unusual '
+        'risk profiles — detected via Isolation Forest</div>',
+        unsafe_allow_html=True
+    )
+
+    anomaly_df = data['anomalies']
+
+    if anomaly_df.empty:
+        st.info(
+            "No anomalies detected. "
+            "Run `python src/models/anomaly_detection.py` to refresh."
+        )
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.error(f"🔴 {len(anomaly_df)} anomalous suppliers detected")
+        with col2:
+            st.metric(
+                "Highest Anomaly Score",
+                f"{anomaly_df['anomaly_score'].max():.3f}",
+            )
+
+        st.divider()
+
+        # Bar chart
+        st.subheader("📊 Anomaly Scores by Supplier")
+        fig = px.bar(
+            anomaly_df.sort_values('anomaly_score', ascending=True),
+            x='anomaly_score',
+            y='supplier_name',
+            orientation='h',
+            color='anomaly_score',
+            color_continuous_scale='Reds',
+            text='anomaly_score',
+            hover_data=['country', 'risk_score'],
+            labels={
+                'anomaly_score': 'Anomaly Score',
+                'supplier_name': 'Supplier',
+            }
+        )
+        fig.update_traces(
+            texttemplate='%{text:.3f}',
+            textposition='outside'
+        )
+        fig.update_layout(
+            height=max(300, len(anomaly_df) * 35),
+            margin=dict(t=20),
+            coloraxis_showscale=False,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.divider()
+
+        # Details table
+        st.subheader("📋 Anomalous Supplier Details")
+        display_df = anomaly_df[[
+            'supplier_name', 'country',
+            'anomaly_score', 'risk_score', 'detection_date'
+        ]].rename(columns={
+            'supplier_name':  'Supplier',
+            'country':        'Country',
+            'anomaly_score':  'Anomaly Score',
+            'risk_score':     'Risk Score',
+            'detection_date': 'Detected On',
+        })
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Anomaly Score": st.column_config.ProgressColumn(
+                    "Anomaly Score",
+                    min_value=0, max_value=1,
+                    format="%.3f",
+                ),
+                "Risk Score": st.column_config.ProgressColumn(
+                    "Risk Score",
+                    min_value=0, max_value=1,
+                    format="%.3f",
+                ),
+            }
+        )
+
+        st.divider()
+
+        st.subheader("ℹ️ How Anomaly Detection Works")
+        st.markdown("""
+        **Algorithm:** Isolation Forest
+
+        Randomly splits supplier features and measures how quickly
+        each supplier gets isolated from the rest.
+
+        - **Normal suppliers** share similar profiles — take many splits
+        - **Anomalous suppliers** have unusual feature combinations —
+          get isolated very quickly
+
+        **Features used:**
+        composite risk, reliability, country risk, transport risk,
+        late rate, shipment volume, category risk
+
+        **Anomaly Score:** 0 = normal → 1 = highly anomalous
+
+        Top **5%** of suppliers flagged (contamination=0.05)
+        """)
+
+
+# ── PAGE 6: Model Performance ─────────────────────────────────────────────────
 
 elif page == "🤖 Model Performance":
 

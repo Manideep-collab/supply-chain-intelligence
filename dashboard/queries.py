@@ -172,3 +172,48 @@ def get_category_risk():
         LIMIT 15
     """
     return pd.read_sql(query, engine)
+
+def get_demand_forecast(category: str):
+    """Fetch forecast for one product category."""
+    query = """
+        SELECT
+            forecast_date,
+            predicted_qty,
+            lower_bound,
+            upper_bound,
+            product_category
+        FROM demand_forecasts
+        WHERE product_category = %(category)s
+        ORDER BY forecast_date
+    """
+    return pd.read_sql(query, engine, params={'category': category})
+
+
+def get_forecast_categories():
+    """Get list of categories that have forecasts."""
+    query = """
+        SELECT DISTINCT product_category
+        FROM demand_forecasts
+        ORDER BY product_category
+    """
+    df = pd.read_sql(query, engine)
+    return df['product_category'].tolist()
+
+
+def get_anomaly_alerts():
+    """Fetch anomalous suppliers."""
+    query = """
+        SELECT
+            a.supplier_id,
+            s.supplier_name,
+            s.country,
+            a.anomaly_score,
+            a.risk_score,
+            a.is_anomaly,
+            a.detection_date
+        FROM anomaly_scores a
+        LEFT JOIN suppliers s ON a.supplier_id = s.supplier_id
+        WHERE a.is_anomaly = 1
+        ORDER BY a.anomaly_score DESC
+    """
+    return pd.read_sql(query, engine)
