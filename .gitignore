@@ -39,3 +39,6 @@ docker/volumes/
 # ── Logs ──────────────────────────────────────────────────
 *.log
 logs/
+
+#extras
+instructions.txt
