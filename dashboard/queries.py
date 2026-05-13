@@ -4,11 +4,37 @@
 import pandas as pd
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src/ingestion'))
-from db import get_engine
+from sqlalchemy import create_engine
+
+def get_engine():
+    """
+    Reads DB credentials from Streamlit secrets (cloud)
+    or environment variables (local).
+    """
+    try:
+        # Streamlit Cloud — reads from secrets
+        import streamlit as st
+        host     = st.secrets["POSTGRES_HOST"]
+        port     = st.secrets["POSTGRES_PORT"]
+        db       = st.secrets["POSTGRES_DB"]
+        user     = st.secrets["POSTGRES_USER"]
+        password = st.secrets["POSTGRES_PASSWORD"]
+    except Exception:
+        # Local — reads from .env file
+        from dotenv import load_dotenv
+        load_dotenv()
+        host     = os.getenv("POSTGRES_HOST")
+        port     = os.getenv("POSTGRES_PORT")
+        db       = os.getenv("POSTGRES_DB")
+        user     = os.getenv("POSTGRES_USER")
+        password = os.getenv("POSTGRES_PASSWORD")
+
+    conn_string = (
+        f"postgresql://{user}:{password}@{host}:{port}/{db}"
+    )
+    return create_engine(conn_string, pool_pre_ping=True)
 
 engine = get_engine()
-
 
 def get_kpi_metrics():
     """
