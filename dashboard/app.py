@@ -80,7 +80,6 @@ st.markdown("""
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("# 🚢")
     st.markdown("## 🚢 Supply Chain Intelligence")
     st.markdown("*Real-time disruption risk platform*")
     st.divider()
