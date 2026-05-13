@@ -34,13 +34,14 @@ def get_engine():
     )
     return create_engine(conn_string, pool_pre_ping=True)
 
-engine = get_engine()
+# engine = get_engine()
 
 def get_kpi_metrics():
     """
     Top-level KPI numbers shown in the summary cards.
     Returns a single-row dict of key metrics.
     """
+    engine = get_engine()
     query = """
         SELECT
             COUNT(*)                                    AS total_shipments,
@@ -62,6 +63,7 @@ def get_supplier_risk_summary():
     Per-supplier risk summary for the risk table and map.
     Joins feature_store with suppliers for names.
     """
+    engine = get_engine()
     query = """
         SELECT
             f.supplier_id,
@@ -84,6 +86,7 @@ def get_supplier_risk_summary():
 
 def get_delivery_status_breakdown():
     """Delivery status counts for pie/bar charts."""
+    engine = get_engine()
     query = """
         SELECT
             status,
@@ -98,6 +101,7 @@ def get_delivery_status_breakdown():
 
 def get_transport_risk_breakdown():
     """Late rate by transport mode."""
+    engine = get_engine()
     query = """
         SELECT
             transport_mode,
@@ -117,6 +121,7 @@ def get_monthly_trend():
     Monthly shipment volume and late rate over time.
     Used for the trend line chart.
     """
+    engine = get_engine()
     query = """
         SELECT
             order_month,
@@ -136,6 +141,7 @@ def get_high_risk_alerts(limit=50):
     """
     Shipments with highest risk scores for the alert feed.
     """
+    engine = get_engine()
     query = f"""
         SELECT
             f.shipment_id,
@@ -168,6 +174,7 @@ def get_country_risk_map_data():
     Country-level aggregated risk for the world map.
     Returns one row per country with avg risk score.
     """
+    engine = get_engine()
     query = """
         SELECT
             origin_country,
@@ -185,6 +192,7 @@ def get_country_risk_map_data():
 
 def get_category_risk():
     """Product category risk breakdown."""
+    engine = get_engine()
     query = """
         SELECT
             s.product_category,
@@ -201,6 +209,7 @@ def get_category_risk():
 
 def get_demand_forecast(category: str):
     """Fetch forecast for one product category."""
+    engine = get_engine()
     query = """
         SELECT
             forecast_date,
@@ -217,6 +226,7 @@ def get_demand_forecast(category: str):
 
 def get_forecast_categories():
     """Get list of categories that have forecasts."""
+    engine = get_engine()
     query = """
         SELECT DISTINCT product_category
         FROM demand_forecasts
@@ -228,6 +238,7 @@ def get_forecast_categories():
 
 def get_anomaly_alerts():
     """Fetch anomalous suppliers."""
+    engine = get_engine()
     query = """
         SELECT
             a.supplier_id,

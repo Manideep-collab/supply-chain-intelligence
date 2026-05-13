@@ -6,6 +6,7 @@ jupyter==1.0.0
 ipykernel==6.29.0
 matplotlib==3.8.2
 seaborn==0.13.2
+requests==2.31.0
 
 # Kafka
 kafka-python==2.0.2

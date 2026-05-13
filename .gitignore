@@ -46,3 +46,4 @@ logs/
 
 #extras
 instructions.txt
+.streamlit/secrets.toml

@@ -95,6 +95,7 @@ with st.sidebar:
             "🔮 Demand Forecast",
             "🔍 Anomaly Detection",
             "🤖 Model Performance",
+            "🎯 Risk Predictor",
         ]
     )
 
@@ -729,3 +730,233 @@ elif page == "🤖 Model Performance":
         - AUC ceiling ~0.76 with current features
         - Adding real-time external data would push AUC toward 0.85+
         """)
+
+# ── PAGE 6: Risk Predictor ────────────────────────────────────────────────────
+
+elif page == "🎯 Risk Predictor":
+
+    st.markdown('<div class="main-header">🎯 Shipment Risk Predictor</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sub-header">Enter shipment details to get '
+        'real-time disruption risk score from our XGBoost model</div>',
+        unsafe_allow_html=True
+    )
+
+    st.info(
+        "This page calls the live FastAPI endpoint to score "
+        "a shipment in real time using our trained XGBoost model."
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("📦 Shipment Details")
+
+        transport_mode = st.selectbox(
+            "Transport Mode",
+            ["Standard Class", "Same Day", "Second Class", "First Class"],
+            help="First Class has historically highest late rate (100%)"
+        )
+
+        origin_country = st.selectbox(
+            "Origin Country",
+            ["United States", "France", "Mexico", "Germany",
+             "Australia", "Brazil", "China", "India", "Indonesia"],
+        )
+
+        product_category = st.selectbox(
+            "Product Category",
+            ["Cleats", "Women's Apparel", "Indoor/Outdoor Games",
+             "Cardio Equipment", "Shop By Sport", "Electronics",
+             "Fishing", "Camping & Hiking"]
+        )
+
+        quantity = st.slider(
+            "Order Quantity",
+            min_value=1, max_value=10, value=1
+        )
+
+        order_month = st.slider(
+            "Order Month",
+            min_value=1, max_value=12, value=6,
+            help="December (12) tends to have higher risk"
+        )
+
+    with col2:
+        st.subheader("🏭 Supplier Profile")
+
+        reliability = st.slider(
+            "Supplier Reliability Score",
+            min_value=0.0, max_value=1.0,
+            value=0.5, step=0.05,
+            help="0 = worst, 1 = best"
+        )
+
+        supplier_late_rate = st.slider(
+            "Supplier Historical Late Rate",
+            min_value=0.0, max_value=1.0,
+            value=0.55, step=0.05,
+            help="% of past shipments that were late"
+        )
+
+        country_risk = st.slider(
+            "Country Risk Score",
+            min_value=0.0, max_value=1.0,
+            value=0.55, step=0.05,
+        )
+
+    st.divider()
+
+    # Build features from inputs
+    transport_risk_map = {
+        'First Class': 4,
+        'Second Class': 3,
+        'Same Day': 2,
+        'Standard Class': 1,
+    }
+
+    transport_risk = transport_risk_map[transport_mode]
+    supplier_risk_index = round(
+        (supplier_late_rate * 0.7 + (1 - reliability) * 0.3), 4
+    )
+    supplier_composite = round(
+        supplier_risk_index * 0.6 + (1 - reliability) * 0.4, 4
+    )
+    order_quarter = (order_month - 1) // 3 + 1
+    is_q4 = int(order_quarter == 4)
+    quantity_log = float(__import__('numpy').log1p(quantity))
+
+    payload = {
+        "transport_risk_score":   transport_risk,
+        "mode_First Class":       transport_mode == "First Class",
+        "mode_Same Day":          transport_mode == "Same Day",
+        "mode_Second Class":      transport_mode == "Second Class",
+        "mode_Standard Class":    transport_mode == "Standard Class",
+        "reliability_score":      reliability,
+        "supplier_late_rate":     supplier_late_rate,
+        "supplier_risk_index":    supplier_risk_index,
+        "supplier_composite_risk": supplier_composite,
+        "country_risk_score":     country_risk,
+        "category_risk_score":    0.55,
+        "category_encoded":       1,
+        "quantity_log":           quantity_log,
+        "is_bulk_order":          int(quantity > 7),
+        "order_month":            order_month,
+        "order_dayofweek":        2,
+        "order_quarter":          order_quarter,
+        "is_month_end":           0,
+        "is_q4":                  is_q4,
+    }
+
+    # Predict button
+    if st.button("🔍 Predict Disruption Risk", use_container_width=True):
+        try:
+            import requests
+            import os
+
+            # Try Streamlit secrets first, then env var, then default
+            try:
+                import streamlit as st_inner
+                api_url = st_inner.secrets.get(
+                    "FASTAPI_URL",
+                    "http://localhost:8000"
+                )
+            except Exception:
+                api_url = os.getenv(
+                    "FASTAPI_URL",
+                    "http://localhost:8000"
+                )
+
+            with st.spinner("Calling risk prediction API..."):
+                response = requests.post(
+                    f"{api_url}/predict/risk",
+                    json=payload,
+                    timeout=30
+                )
+
+            if response.status_code == 200:
+                result = response.json()
+
+                risk_score = result['risk_score']
+                risk_label = result['risk_label']
+                late_prob  = result['late_probability']
+
+                # Color based on risk
+                color_map = {
+                    'LOW':      '🟢',
+                    'MEDIUM':   '🟡',
+                    'HIGH':     '🟠',
+                    'CRITICAL': '🔴',
+                }
+                icon = color_map.get(risk_label, '⚪')
+
+                st.divider()
+                st.subheader("📊 Prediction Result")
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric(
+                        "Risk Score",
+                        f"{risk_score:.1f} / 100"
+                    )
+                with col2:
+                    st.metric(
+                        "Risk Label",
+                        f"{icon} {risk_label}"
+                    )
+                with col3:
+                    st.metric(
+                        "Late Probability",
+                        f"{late_prob * 100:.1f}%"
+                    )
+
+                st.divider()
+
+                # Top risk factors
+                st.subheader("🔍 Top Risk Factors")
+                factors = result.get('top_risk_factors', [])
+                for factor in factors:
+                    st.write(
+                        f"**{factor['feature']}** — "
+                        f"value: `{factor['value']}` | "
+                        f"importance: `{factor['importance']:.4f}`"
+                    )
+
+                # Recommendation
+                st.divider()
+                st.subheader("💡 Recommendation")
+                if risk_label == "CRITICAL":
+                    st.error(
+                        "🔴 CRITICAL RISK — Immediate action required. "
+                        "Consider alternative supplier or transport mode."
+                    )
+                elif risk_label == "HIGH":
+                    st.warning(
+                        "🟠 HIGH RISK — Arrange contingency plan. "
+                        "Monitor this shipment closely."
+                    )
+                elif risk_label == "MEDIUM":
+                    st.info(
+                        "🟡 MEDIUM RISK — Monitor this shipment. "
+                        "Consider confirming with supplier."
+                    )
+                else:
+                    st.success(
+                        "🟢 LOW RISK — Shipment looks good. "
+                        "Standard monitoring applies."
+                    )
+
+            else:
+                st.error(
+                    f"API Error {response.status_code}: "
+                    f"{response.text}"
+                )
+
+        except requests.exceptions.ConnectionError:
+            st.error(
+                "❌ Cannot connect to FastAPI. "
+                "Make sure it's running at localhost:8000"
+            )
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
